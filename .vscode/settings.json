@@ -1,0 +1,6 @@
+{
+  "java.project.sourcePaths": ["employee_management\\src"],
+  "java.project.referencedLibraries": [
+    "employee_management\\lib\\mysql-connector-j-9.4.0.jar"
+  ]
+}
