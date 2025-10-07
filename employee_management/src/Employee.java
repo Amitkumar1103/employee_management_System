@@ -1,5 +1,7 @@
-import java.io.*;
+
+// import java.io.*;
 import java.util.*;
+import java.sql.*;
 
 class Employee {
     private int id;
@@ -47,115 +49,170 @@ class Employee {
     }
 }
 
+class DBConnection {
+    private static final String URL = "jdbc:mysql://localhost:3306/ems_db";
+    private static final String USER = "root";
+    private static final String PASSWORD = "1234";
+
+    public static Connection getConnection() {
+        Connection conn = null;
+        try {
+            conn = DriverManager.getConnection(URL, USER, PASSWORD);
+        } catch (SQLException e) {
+            System.out.println("Database connection failed: " + e.getMessage());
+        }
+        return conn;
+    }
+}
+
 class EmployeeManager {
-    private ArrayList<Employee> employees = new ArrayList<>();
+    // private ArrayList<Employee> employees = new ArrayList<>();
 
-    // file store
-    public void saveToFile() {
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter("employees.txt"))) {
-            for (Employee emp : employees) {
-                bw.write(emp.getId() + "," + emp.getName() + "," + emp.getDepartment() + "," + emp.getSalary());
-                bw.newLine(); // move to next line
-            }
-            System.out.println("💾 Data saved successfully to employees.txt");
-        } catch (IOException e) {
-            System.out.println("❌ Error saving file: " + e.getMessage());
-        }
-    }
+    // File Operations
+    // public void saveToFile() {
+    // try (BufferedWriter bw = new BufferedWriter(new FileWriter("employees.txt")))
+    // {
+    // for (Employee emp : employees) {
+    // bw.write(emp.getId() + "," + emp.getName() + "," + emp.getDepartment() + ","
+    // + emp.getSalary());
+    // bw.newLine(); // move to next line
+    // }
+    // System.out.println(" Data saved successfully to employees.txt");
+    // } catch (IOException e) {
+    // System.out.println("Error saving file: " + e.getMessage());
+    // }
+    // }
 
-    public void loadFromFile() {
-        try (BufferedReader br = new BufferedReader(new FileReader("employees.txt"))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                String[] parts = line.split(",");
-                if (parts.length == 4) {
-                    int id = Integer.parseInt(parts[0]);
-                    String name = parts[1];
-                    String department = parts[2];
-                    double salary = Double.parseDouble(parts[3]);
-                    Employee emp = new Employee(id, name, department, salary);
-                    employees.add(emp);
-                }
-            }
-            System.out.println("💾 Data loaded successfully from employees.txt");
-        } catch (FileNotFoundException e) {
-            System.out.println("⚠ File not found, starting with an empty list.");
-        } catch (IOException e) {
-            System.out.println("❌ Error loading file: " + e.getMessage());
-        }
-    }
+    // public void loadFromFile() {
+    // try (BufferedReader br = new BufferedReader(new FileReader("employees.txt")))
+    // {
+    // String line;
+    // while ((line = br.readLine()) != null) {
+    // String[] parts = line.split(",");
+    // if (parts.length == 4) {
+    // int id = Integer.parseInt(parts[0]);
+    // String name = parts[1];
+    // String department = parts[2];
+    // double salary = Double.parseDouble(parts[3]);
+    // Employee emp = new Employee(id, name, department, salary);
+    // employees.add(emp);
+    // }
+    // }
+    // System.out.println(" Data loaded successfully from employees.txt");
+    // } catch (FileNotFoundException e) {
+    // System.out.println(" File not found, starting with an empty list.");
+    // } catch (IOException e) {
+    // System.out.println(" Error loading file: " + e.getMessage());
+    // }
+    // }
 
     // Add Employee
-    public void addEmployee(Employee emp) {
+    public void addemp(Employee emp) {
+        String query = "INSERT INTO employees (id, name, department, salary) VALUES (?, ?, ?, ?)";
+        try (Connection conn = DBConnection.getConnection();
+                PreparedStatement ps = conn.prepareStatement(query)) {
 
-        if (searchEmployee(emp.getId()) != null) {
-            System.out.println("❌ Employee with ID " + emp.getId() + " already exists!");
-            return;
+            ps.setInt(1, emp.getId());
+            ps.setString(2, emp.getName());
+            ps.setString(3, emp.getDepartment());
+            ps.setDouble(4, emp.getSalary());
+            ps.executeUpdate();
+            System.out.println("Employee added successfully.");
+
+        } catch (SQLException e) {
+            System.out.println("Error adding employee: " + e.getMessage());
         }
-        if (emp.getSalary() < 0) {
-            System.out.println("❌ Salary cannot be negative!");
-            return;
-        }
-        if (emp.getName().trim().isEmpty() || emp.getDepartment().trim().isEmpty()) {
-            System.out.println("❌ Name and Department cannot be empty!");
-            return;
-        }
-        employees.add(emp);
-        System.out.println("✅ Employee added successfully!");
     }
 
     // Display All Employees
-    public void displayEmployees() {
-        if (employees.isEmpty()) {
-            System.out.println("⚠ No employees found.");
-            return;
-        }
-        for (Employee emp : employees) {
-            System.out.println(emp);
+    public void disEmp() {
+        String query = "SELECT * FROM employees";
+        try (Connection conn = DBConnection.getConnection();
+                Statement stmt = conn.createStatement();
+                ResultSet rs = stmt.executeQuery(query)) {
+
+            while (rs.next()) {
+                System.out.println("ID: " + rs.getInt("id") +
+                        ", Name: " + rs.getString("name") +
+                        ", Department: " + rs.getString("department") +
+                        ", Salary: " + rs.getDouble("salary"));
+            }
+        } catch (SQLException e) {
+            System.out.println("Error displaying employees: " + e.getMessage());
         }
     }
 
     // Search Employee by ID
-    public Employee searchEmployee(int id) {
-        for (Employee emp : employees) {
-            if (emp.getId() == id) {
-                return emp;
+    public Employee searchEmp(int id) {
+        String query = "SELECT * FROM employees WHERE id = ?";
+        try (Connection conn = DBConnection.getConnection();
+                PreparedStatement ps = conn.prepareStatement(query)) {
+
+            ps.setInt(1, id);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                return new Employee(
+                        rs.getInt("id"),
+                        rs.getString("name"),
+                        rs.getString("department"),
+                        rs.getDouble("salary"));
             }
+        } catch (SQLException e) {
+            System.out.println("Error searching employee: " + e.getMessage());
         }
-        return null; // Not found
+        return null;
     }
 
     // Delete Employee
-    public boolean deleteEmployee(int id) {
-        Employee emp = searchEmployee(id);
-        if (emp != null) {
-            employees.remove(emp);
-            return true;
+    public boolean delEmp(int id) {
+        String query = "DELETE FROM employees WHERE id = ?";
+        try (Connection conn = DBConnection.getConnection();
+                PreparedStatement ps = conn.prepareStatement(query)) {
+
+            ps.setInt(1, id);
+            int rows = ps.executeUpdate();
+            return rows > 0;
+        } catch (SQLException e) {
+            System.out.println("Error deleting employee: " + e.getMessage());
+            return false;
         }
-        return false;
     }
 
-    public Employee updateEmployee(int id, String name, String department, double salary) {
-        Employee emp = searchEmployee(id);
-        if (emp != null) {
-            emp.setName(name);
-            emp.setDepartment(department);
-            emp.setSalary(salary);
-            return emp;
-        }
-        return null;
+    public void updateEmp(int id, String name, String department, double newSalary) {
+        String query = "UPDATE employees SET name=?, department=?, salary=? WHERE id=?";
+        try (Connection conn = DBConnection.getConnection();
+                PreparedStatement ps = conn.prepareStatement(query)) {
 
+            ps.setString(1, name);
+            ps.setString(2, department);
+            ps.setDouble(3, newSalary);
+            ps.setInt(4, id);
+
+            int rows = ps.executeUpdate();
+            if (rows > 0)
+                System.out.println("Employee updated successfully.");
+            else
+                System.out.println("Employee not found.");
+        } catch (SQLException e) {
+            System.out.println("Error updating employee: " + e.getMessage());
+        }
     }
 }
 
 class EmployeeApp {
     public static void main(String[] args) {
+        Connection conn = DBConnection.getConnection();
+        if (conn != null) {
+            System.out.println("Connected to MySQL successfully!");
+        } else {
+            System.out.println("Connection failed.");
+        }
         Scanner sc = new Scanner(System.in);
         EmployeeManager manager = new EmployeeManager();
-        manager.loadFromFile();
+        // manager.loadFromFile();
         int choice = 0;
         while (true) {
-            System.out.println("\n===== Employee Management System =====");
+            System.out.println("\nEmployee Management System:-");
             System.out.println("1. Add Employee");
             System.out.println("2. Display All Employees");
             System.out.println("3. Search Employee");
@@ -178,49 +235,85 @@ class EmployeeApp {
             switch (choice) {
                 case 1:
                     System.out.print("Enter ID: ");
-                    int id = sc.nextInt();
+                    int id;
+                    try {
+                        id = sc.nextInt();
+                    } catch (InputMismatchException e) {
+                        System.out.println(" Invalid ID, must be an integer.");
+                        sc.nextLine();
+                        break;
+                    }
                     sc.nextLine(); // consume newline
                     System.out.print("Enter Name: ");
                     String name = sc.nextLine();
                     System.out.print("Enter Department: ");
                     String dept = sc.nextLine();
                     System.out.print("Enter Salary: ");
-                    double sal = sc.nextDouble();
-
-                    Employee emp = new Employee(id, name, dept, sal);
-                    manager.addEmployee(emp);
-                    manager.saveToFile();
+                    double sal;
+                    try {
+                        sal = sc.nextDouble();
+                        if (sal < 0) {
+                            System.out.println(" Salary cannot be negative.");
+                            break;
+                        }
+                    } catch (InputMismatchException e) {
+                        System.out.println(" Invalid salary, must be a number.");
+                        sc.nextLine();
+                        break;
+                    }
+                    // manager.saveToFile();
+                    manager.addemp(new Employee(id, name, dept, sal));
                     break;
 
                 case 2:
-                    manager.displayEmployees();
+                    manager.disEmp();
                     break;
 
                 case 3:
                     System.out.print("Enter ID to search: ");
-                    int searchId = sc.nextInt();
-                    Employee found = manager.searchEmployee(searchId);
+                    int searchId;
+                    try {
+                        searchId = sc.nextInt();
+                    } catch (InputMismatchException e) {
+                        System.out.println("Invalid input, please enter a number.");
+                        sc.nextLine();
+                        continue;
+                    }
+                    Employee found = manager.searchEmp(searchId);
                     if (found != null)
                         System.out.println(found);
                     else
-                        System.out.println("❌ Employee not found!");
+                        System.out.println("Employee not found!");
                     break;
 
                 case 4:
                     System.out.print("Enter ID to delete: ");
-                    int deleteId = sc.nextInt();
-                    if (manager.deleteEmployee(deleteId))
-                        System.out.println("✅ Employee deleted.");
+                    int deleteId;
+                    try {
+                        deleteId = sc.nextInt();
+                    } catch (InputMismatchException e) {
+                        System.out.println(" Invalid ID, must be an integer.");
+                        sc.nextLine();
+                        break;
+                    }
+                    if (manager.delEmp(deleteId))
+                        System.out.println("Employee deleted.");
                     else
-                        System.out.println("❌ Employee not found.");
+                        System.out.println("Employee not found.");
                     break;
 
                 case 5:
                     System.out.print("Enter ID to update: ");
-                    int updateId = sc.nextInt();
-                    sc.nextLine(); // consume newline
+                    int updateId;
+                    try {
+                        updateId = sc.nextInt();
+                        sc.nextLine(); // consume newline
+                    } catch (InputMismatchException e) {
+                        System.out.println("Invalid ID, must be an integer.");
+                        break;
+                    }
 
-                    Employee e = manager.searchEmployee(updateId);
+                    Employee e = manager.searchEmp(updateId);
                     if (e != null) {
                         System.out.print("Enter new name (or press Enter to skip): ");
                         String newName = sc.nextLine();
@@ -234,26 +327,42 @@ class EmployeeApp {
                             e.setDepartment(newDept);
                         }
                         System.out.print("Enter new salary (or 0 to skip): ");
-                        String newSalary = sc.nextLine();
-                        if (!newSalary.isEmpty() && Double.parseDouble(newSalary) != 0) {
-                            e.setSalary(Double.parseDouble(newSalary));
+                        String salaryInput = sc.nextLine();
+                        double newSalary = e.getSalary();
+                        if (!salaryInput.trim().isEmpty()) {
+                            try {
+
+                                // Convert the string to a double
+                                newSalary = Double.parseDouble(salaryInput);
+                                if (newSalary < 0) {
+                                    System.out.println("Salary cannot be negative.");
+                                    break;
+                                }
+                                e.setSalary(newSalary);
+                            } catch (NumberFormatException ex) {
+                                System.out.println("Invalid salary, must be a number.");
+                                break;
+                            }
                         }
-                        System.out.println(" Employee updated successfully!");
+
+                        manager.updateEmp(e.getId(), e.getName(), e.getDepartment(), e.getSalary());
+                        System.out.println("Employee updated successfully!");
+
                         System.out.println(e);
                     } else {
-                        System.out.println(" Employee not found.");
+                        System.out.println("Employee not found.");
                     }
+
                     break;
 
                 case 6:
-                    manager.saveToFile();
-                    System.out.println("💾 Data saved. Exiting...");
-
+                    System.out.println("Data saved. Exiting...");
+                    // manager.saveToFile();
                     sc.close();
                     return;
 
                 default:
-                    System.out.println(" Invalid choice, try again.");
+                    System.out.println("Invalid choice, try again.");
             }
         }
     }
