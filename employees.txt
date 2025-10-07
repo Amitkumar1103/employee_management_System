@@ -1,2 +1,0 @@
-1,amit,bca,100000.0
-2,deepak,bcu,1000.0
