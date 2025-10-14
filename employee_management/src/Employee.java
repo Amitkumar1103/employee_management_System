@@ -3,6 +3,56 @@
 import java.util.*;
 import java.sql.*;
 
+// Database Connection Class
+class DBConnection {
+    private static final String URL = "jdbc:mysql://localhost:3306/ems_db";
+    private static final String USER = "root";
+    private static final String PASSWORD = "1234";
+
+    public static Connection getConnection() {
+        Connection conn = null;
+        try {
+            conn = DriverManager.getConnection(URL, USER, PASSWORD);
+        } catch (SQLException e) {
+            System.out.println("Database connection failed: " + e.getMessage());
+            System.exit(1);
+        }
+        return conn;
+    }
+}
+
+// login & sign
+class User {
+    private int id;
+    private String username;
+    private String password;
+    private String role;
+
+    public User(int id, String username, String password, String role) {
+        this.id = id;
+        this.username = username;
+        this.password = password;
+        this.role = role;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public String getRole() {
+        return role;
+    }
+}
+
+// Employee Class
 class Employee {
     private int id;
     private String name;
@@ -44,70 +94,68 @@ class Employee {
         this.salary = salary;
     }
 
+    @Override
     public String toString() {
-        return "Employee [id=" + id + ", name=" + name + ", department=" + department + ", salary=" + salary + "]";
+        return "ID: " + id + ", Name: " + name + ", Department: " + department + ", Salary: " + salary;
     }
-}
 
-class DBConnection {
-    private static final String URL = "jdbc:mysql://localhost:3306/ems_db";
-    private static final String USER = "root";
-    private static final String PASSWORD = "1234";
-
-    public static Connection getConnection() {
-        Connection conn = null;
-        try {
-            conn = DriverManager.getConnection(URL, USER, PASSWORD);
-        } catch (SQLException e) {
-            System.out.println("Database connection failed: " + e.getMessage());
-        }
-        return conn;
-    }
 }
 
 class EmployeeManager {
-    // private ArrayList<Employee> employees = new ArrayList<>();
 
-    // File Operations
-    // public void saveToFile() {
-    // try (BufferedWriter bw = new BufferedWriter(new FileWriter("employees.txt")))
-    // {
-    // for (Employee emp : employees) {
-    // bw.write(emp.getId() + "," + emp.getName() + "," + emp.getDepartment() + ","
-    // + emp.getSalary());
-    // bw.newLine(); // move to next line
-    // }
-    // System.out.println(" Data saved successfully to employees.txt");
-    // } catch (IOException e) {
-    // System.out.println("Error saving file: " + e.getMessage());
-    // }
-    // }
+    public User login(String username, String password) {
+        String query = "SELECT * FROM users WHERE username=? AND password=?";
+        try (Connection conn = DBConnection.getConnection();
+                PreparedStatement ps = conn.prepareStatement(query)) {
 
-    // public void loadFromFile() {
-    // try (BufferedReader br = new BufferedReader(new FileReader("employees.txt")))
-    // {
-    // String line;
-    // while ((line = br.readLine()) != null) {
-    // String[] parts = line.split(",");
-    // if (parts.length == 4) {
-    // int id = Integer.parseInt(parts[0]);
-    // String name = parts[1];
-    // String department = parts[2];
-    // double salary = Double.parseDouble(parts[3]);
-    // Employee emp = new Employee(id, name, department, salary);
-    // employees.add(emp);
-    // }
-    // }
-    // System.out.println(" Data loaded successfully from employees.txt");
-    // } catch (FileNotFoundException e) {
-    // System.out.println(" File not found, starting with an empty list.");
-    // } catch (IOException e) {
-    // System.out.println(" Error loading file: " + e.getMessage());
-    // }
-    // }
+            ps.setString(1, username);
+            ps.setString(2, password);
+            ResultSet rs = ps.executeQuery();
+
+            if (rs.next()) {
+                return new User(
+                        rs.getInt("id"),
+                        rs.getString("username"),
+                        rs.getString("password"),
+                        rs.getString("role"));
+            } else {
+                System.out.println("Invalid username or password.");
+            }
+
+        } catch (SQLException e) {
+            System.out.println("Login error: " + e.getMessage());
+        }
+        return null;
+    }
+
+    public User signup(String username, String password) {
+        if (username == null || username.trim().isEmpty() || password == null || password.trim().isEmpty()) {
+            System.out.println("Username and password cannot be empty.");
+            return null;
+        }
+        String query = "INSERT INTO users (username, password) VALUES (?, ?)";
+        try (Connection conn = DBConnection.getConnection();
+                PreparedStatement ps = conn.prepareStatement(query)) {
+            ps.setString(1, username);
+            ps.setString(2, password);
+            ps.executeUpdate();
+            System.out.println("Signup successful! You can now login.");
+        } catch (SQLException e) {
+            if (e.getMessage() != null && e.getMessage().contains("Duplicate entry"))
+                System.out.println("Username already exists!");
+            else
+                System.out.println("Signup error: " + e.getMessage());
+        }
+        return null;
+    }
 
     // Add Employee
     public void addemp(Employee emp) {
+        if (emp.getId() <= 0 || emp.getName() == null || emp.getName().trim().isEmpty() ||
+                emp.getDepartment() == null || emp.getDepartment().trim().isEmpty()) {
+            System.out.println("Employee ID, name, and department cannot be empty.");
+            return;
+        }
         String query = "INSERT INTO employees (id, name, department, salary) VALUES (?, ?, ?, ?)";
         try (Connection conn = DBConnection.getConnection();
                 PreparedStatement ps = conn.prepareStatement(query)) {
@@ -182,7 +230,11 @@ class EmployeeManager {
         String query = "UPDATE employees SET name=?, department=?, salary=? WHERE id=?";
         try (Connection conn = DBConnection.getConnection();
                 PreparedStatement ps = conn.prepareStatement(query)) {
-
+            if (name == null || name.trim().isEmpty() ||
+                    department == null || department.trim().isEmpty()) {
+                System.out.println("Name and department cannot be empty.");
+                return;
+            }
             ps.setString(1, name);
             ps.setString(2, department);
             ps.setDouble(3, newSalary);
@@ -197,9 +249,80 @@ class EmployeeManager {
             System.out.println("Error updating employee: " + e.getMessage());
         }
     }
+
+    public void makeAdminById(int userId) {
+        String query = "UPDATE users SET role='admin' WHERE id=?";
+        try (Connection conn = DBConnection.getConnection();
+                PreparedStatement ps = conn.prepareStatement(query)) {
+
+            ps.setInt(1, userId);
+            int rows = ps.executeUpdate();
+            if (rows > 0)
+                System.out.println("User with ID " + userId + " promoted to admin!");
+            else
+                System.out.println("User ID not found.");
+
+        } catch (SQLException e) {
+            System.out.println("Error promoting user: " + e.getMessage());
+        }
+    }
+
+    public void viewAllUsers() {
+        String query = "SELECT id, username, password, role FROM users";
+        try (Connection conn = DBConnection.getConnection();
+                Statement stmt = conn.createStatement();
+                ResultSet rs = stmt.executeQuery(query)) {
+
+            System.out.println("\n---- Registered Users ----");
+            while (rs.next()) {
+                System.out.println("ID: " + rs.getInt("id") +
+                        ", Username: " + rs.getString("username") +
+                        ", Password: " + rs.getString("password") +
+                        ", Role: " + rs.getString("role"));
+            }
+        } catch (SQLException e) {
+            System.out.println("Error fetching users: " + e.getMessage());
+        }
+    }
 }
 
 class EmployeeApp {
+
+    public static int getIntInput(Scanner sc, String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            String input = sc.nextLine().trim();
+
+            if (input.isEmpty()) {
+                System.out.println("Input cannot be empty. Please enter a number.");
+                continue;
+            }
+            try {
+                return Integer.parseInt(input);
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid input. Please enter a valid integer.");
+            }
+        }
+    }
+
+    public static String getString(Scanner sc, String prompt) {
+        String string;
+        while (true) {
+            System.out.print(prompt);
+            try {
+                string = sc.nextLine();
+                return string;
+            } catch (InputMismatchException e) {
+                System.out.println("Invalid input, please enter a valid string.");
+                sc.nextLine();
+            }
+            // } catch (NullPointerException e) {
+            // System.out.println("Input cannot be null, please enter a valid string.");
+            // sc.nextLine();
+            // }
+        }
+    }
+
     public static void main(String[] args) {
         Connection conn = DBConnection.getConnection();
         if (conn != null) {
@@ -208,162 +331,180 @@ class EmployeeApp {
             System.out.println("Connection failed.");
         }
         Scanner sc = new Scanner(System.in);
-        EmployeeManager manager = new EmployeeManager();
-        // manager.loadFromFile();
-        int choice = 0;
+        EmployeeManager empManager = new EmployeeManager();
+        User currentUser = null;
         while (true) {
-            System.out.println("\nEmployee Management System:-");
-            System.out.println("1. Add Employee");
-            System.out.println("2. Display All Employees");
-            System.out.println("3. Search Employee");
-            System.out.println("4. Delete Employee");
-            System.out.println("5. Update Employee");
-            System.out.println("6. Exit");
-            try {
-                System.out.print("Enter your choice: ");
-                choice = sc.nextInt();
-
-                if (choice < 1 || choice > 6) {
-                    System.out.println("Invalid choice, please select between 1-6.");
-                    continue;
-                }
-            } catch (InputMismatchException e) {
-                System.out.println("Invalid input, please enter a number.");
-                sc.nextLine();
+            System.out.println("\n===== Welcome to EMS =====");
+            System.out.println("1. Login");
+            System.out.println("2. Signup");
+            System.out.println("3. Exit");
+            int choice = getIntInput(sc, "Enter choice: ");
+            if (choice < 1 || choice > 3) {
+                System.out.println("Invalid choice, please select between 1-3.");
                 continue;
             }
+
             switch (choice) {
                 case 1:
-                    System.out.print("Enter ID: ");
-                    int id;
-                    try {
-                        id = sc.nextInt();
-                    } catch (InputMismatchException e) {
-                        System.out.println(" Invalid ID, must be an integer.");
-                        sc.nextLine();
-                        break;
-                    }
-                    sc.nextLine(); // consume newline
-                    System.out.print("Enter Name: ");
-                    String name = sc.nextLine();
-                    System.out.print("Enter Department: ");
-                    String dept = sc.nextLine();
-                    System.out.print("Enter Salary: ");
-                    double sal;
-                    try {
-                        sal = sc.nextDouble();
-                        if (sal < 0) {
-                            System.out.println(" Salary cannot be negative.");
-                            break;
-                        }
-                    } catch (InputMismatchException e) {
-                        System.out.println(" Invalid salary, must be a number.");
-                        sc.nextLine();
-                        break;
-                    }
-                    // manager.saveToFile();
-                    manager.addemp(new Employee(id, name, dept, sal));
-                    break;
-
-                case 2:
-                    manager.disEmp();
-                    break;
-
-                case 3:
-                    System.out.print("Enter ID to search: ");
-                    int searchId;
-                    try {
-                        searchId = sc.nextInt();
-                    } catch (InputMismatchException e) {
-                        System.out.println("Invalid input, please enter a number.");
-                        sc.nextLine();
+                    String username = getString(sc, "Enter username: ");
+                    String password = getString(sc, "Enter password: ");
+                    currentUser = empManager.login(username, password);
+                    if (currentUser != null) {
+                        System.out.println("Login successful!");
+                    } else {
+                        System.out.println("Login failed, try again.");
                         continue;
                     }
-                    Employee found = manager.searchEmp(searchId);
-                    if (found != null)
-                        System.out.println(found);
-                    else
-                        System.out.println("Employee not found!");
                     break;
-
-                case 4:
-                    System.out.print("Enter ID to delete: ");
-                    int deleteId;
-                    try {
-                        deleteId = sc.nextInt();
-                    } catch (InputMismatchException e) {
-                        System.out.println(" Invalid ID, must be an integer.");
-                        sc.nextLine();
-                        break;
-                    }
-                    if (manager.delEmp(deleteId))
-                        System.out.println("Employee deleted.");
-                    else
-                        System.out.println("Employee not found.");
-                    break;
-
-                case 5:
-                    System.out.print("Enter ID to update: ");
-                    int updateId;
-                    try {
-                        updateId = sc.nextInt();
-                        sc.nextLine(); // consume newline
-                    } catch (InputMismatchException e) {
-                        System.out.println("Invalid ID, must be an integer.");
-                        break;
-                    }
-
-                    Employee e = manager.searchEmp(updateId);
-                    if (e != null) {
-                        System.out.print("Enter new name (or press Enter to skip): ");
-                        String newName = sc.nextLine();
-                        if (!newName.trim().isEmpty()) {
-                            e.setName(newName);
-                        }
-
-                        System.out.print("Enter new department (or press Enter to skip): ");
-                        String newDept = sc.nextLine();
-                        if (!newDept.trim().isEmpty()) {
-                            e.setDepartment(newDept);
-                        }
-                        System.out.print("Enter new salary (or 0 to skip): ");
-                        String salaryInput = sc.nextLine();
-                        double newSalary = e.getSalary();
-                        if (!salaryInput.trim().isEmpty()) {
-                            try {
-
-                                // Convert the string to a double
-                                newSalary = Double.parseDouble(salaryInput);
-                                if (newSalary < 0) {
-                                    System.out.println("Salary cannot be negative.");
-                                    break;
-                                }
-                                e.setSalary(newSalary);
-                            } catch (NumberFormatException ex) {
-                                System.out.println("Invalid salary, must be a number.");
-                                break;
-                            }
-                        }
-
-                        manager.updateEmp(e.getId(), e.getName(), e.getDepartment(), e.getSalary());
-                        System.out.println("Employee updated successfully!");
-
-                        System.out.println(e);
+                case 2:
+                    String username1 = getString(sc, "Enter username: ");
+                    String password1 = getString(sc, "Enter password: ");
+                    currentUser = empManager.signup(username1, password1);
+                    if (currentUser != null) {
+                        System.out.println("Signup successful!. You can now login with your credentials");
                     } else {
-                        System.out.println("Employee not found.");
+                        System.out.println("Signup failed, try again.");
+                        continue;
                     }
-
                     break;
-
-                case 6:
-                    System.out.println("Data saved. Exiting...");
-                    // manager.saveToFile();
+                case 3:
+                    System.out.println("Goodbye!");
                     sc.close();
                     return;
-
                 default:
-                    System.out.println("Invalid choice, try again.");
+                    System.out.println("Invalid choice!");
+            }
+            System.out.println("\nLogged in as: " + currentUser.getUsername() + " (" + currentUser.getRole() + ")");
+
+            if (currentUser.getRole().equalsIgnoreCase("admin")) {
+                adminMenu(sc, empManager);
+            } else {
+                userMenu(sc, empManager);
             }
         }
     }
+
+    public static void adminMenu(Scanner sc, EmployeeManager empManager) {
+        while (true) {
+            System.out.println("\n===== Admin Menu =====");
+            System.out.println("1. Add Employee");
+            System.out.println("2. Display All Employees");
+            System.out.println("3. Search Employee");
+            System.out.println("4. Update Employee");
+            System.out.println("5. Delete Employee");
+            System.out.println("6. View All Users");
+            System.out.println("7. Make User Admin (by ID)");
+            System.out.println("8. Logout");
+            int choice = getIntInput(sc, "Enter choice: ");
+
+            switch (choice) {
+                case 1:
+                    int id = getIntInput(sc, "Enter ID: ");
+                    String name = getString(sc, "Enter Name: ");
+                    String dept = getString(sc, "Enter Department: ");
+                    double sal = getIntInput(sc, "Enter Salary: ");
+
+                    Employee emp = new Employee(id, name, dept, sal);
+                    empManager.addemp(emp);
+                    break;
+
+                case 2:
+                    empManager.disEmp();
+                    break;
+
+                case 3:
+
+                    int searchId = getIntInput(sc, "Enter ID to search: ");
+                    Employee found = empManager.searchEmp(searchId);
+                    if (found != null) {
+                        System.out.println("Employee Found: " + found);
+                    } else {
+                        System.out.println("Employee not found!");
+                    }
+                    break;
+
+                case 4:
+                    int updateId = getIntInput(sc, "Enter ID to update: ");
+                    String newName = getString(sc, "Enter new name: ");
+                    String newDept = getString(sc, "Enter new department: ");
+                    double newSalary = getIntInput(sc, "Enter new salary: ");
+                    empManager.updateEmp(updateId, newName, newDept, newSalary);
+                    break;
+
+                case 5:
+                    int deleteId = getIntInput(sc, "Enter ID to delete: ");
+                    boolean deleted = empManager.delEmp(deleteId);
+                    if (deleted)
+                        System.out.println("Employee deleted successfully.");
+                    else
+                        System.out.println("Employee not found or error occurred.");
+                    break;
+
+                case 6:
+                    empManager.viewAllUsers();
+                    break;
+
+                case 7:
+                    empManager.viewAllUsers();
+                    int promoteId = getIntInput(sc, "Enter user ID to promote: ");
+                    empManager.makeAdminById(promoteId);
+                    break;
+
+                case 8:
+                    System.out.println("Logged out.");
+                    return;
+
+                default:
+                    System.out.println("Invalid choice, please select between 1-8.");
+            }
+        }
+    }
+
+    public static void userMenu(Scanner sc, EmployeeManager empManager) {
+        while (true) {
+            System.out.println("\n===== User Menu =====");
+            System.out.println("1. View Employees");
+            System.out.println("2. Search Employee");
+            System.out.println("3. Logout");
+            int choice = getIntInput(sc, "Enter choice (1-3): ");
+
+            switch (choice) {
+                case 1:
+                    String query = "SELECT id, name, department FROM employees";
+                    try (Connection conn = DBConnection.getConnection();
+                            Statement stmt = conn.createStatement();
+                            ResultSet rs = stmt.executeQuery(query)) {
+
+                        while (rs.next()) {
+                            System.out.println("ID: " + rs.getInt("id") +
+                                    ", Name: " + rs.getString("name") +
+                                    ", Department: " + rs.getString("department"));
+                        }
+                    } catch (SQLException e) {
+                        System.out.println("Error displaying employees: " + e.getMessage());
+                    }
+                    break;
+
+                case 2:
+                    int id = getIntInput(sc, "Enter ID to search: ");
+                    Employee e = empManager.searchEmp(id);
+                    if (e != null) {
+                        System.out.println("ID: " + e.getId() +
+                                ", Name: " + e.getName() +
+                                ", Department: " + e.getDepartment());
+                    } else {
+                        System.out.println("Employee not found!");
+                    }
+                    break;
+
+                case 3:
+                    System.out.println("Logged out.");
+                    return;
+
+                default:
+                    System.out.println("Invalid choice!");
+            }
+        }
+    }
+
 }
